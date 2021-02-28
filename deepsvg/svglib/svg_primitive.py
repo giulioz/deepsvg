@@ -23,8 +23,8 @@ class SVGPrimitive:
     """
     Reference: https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/Basic_Shapes
     """
-    def __init__(self, color="black", fill=False, dasharray=None, stroke_width=".3", opacity=1.0):
-        self.color = color
+    def __init__(self, stroke=(0,0,0), fill=False, dasharray=None, stroke_width=".3", opacity=1.0):
+        self.stroke = stroke
         self.dasharray = dasharray
         self.stroke_width = stroke_width
         self.opacity = opacity
@@ -32,7 +32,7 @@ class SVGPrimitive:
         self.fill = fill
 
     def _get_fill_attr(self):
-        fill_attr = f'fill="{self.color}" fill-opacity="{self.opacity}"' if self.fill else f'fill="none" stroke="{self.color}" stroke-width="{self.stroke_width}" stroke-opacity="{self.opacity}"'
+        fill_attr = f'fill="{self.stroke}" fill-opacity="{self.opacity}"' if self.fill else f'fill="none" stroke="{self.stroke}" stroke-width="{self.stroke_width}" stroke-opacity="{self.opacity}"'
         if self.dasharray is not None and not self.fill:
             fill_attr += f' stroke-dasharray="{self.dasharray}"'
         return fill_attr
@@ -220,13 +220,16 @@ class SVGPolygon(SVGPolyline):
 
 
 class SVGPathGroup(SVGPrimitive):
-    def __init__(self, svg_paths: List[SVGPath] = None, origin=None, *args, **kwargs):
+    def __init__(self, svg_paths: List[SVGPath] = None, fill=False, stroke=(0,0,0,255), origin=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.svg_paths = svg_paths
 
         if origin is None:
             origin = Point(0.)
         self.origin = origin
+
+        self.fill = fill
+        self.stroke = stroke
 
     # Alias
     @property
@@ -268,7 +271,7 @@ class SVGPathGroup(SVGPrimitive):
 
     def copy(self):
         return SVGPathGroup([svg_path.copy() for svg_path in self.svg_paths], self.origin.copy(),
-                            self.color, self.fill, self.dasharray, self.stroke_width, self.opacity)
+                            self.stroke, self.fill, self.dasharray, self.stroke_width, self.opacity)
 
     def __repr__(self):
         return "SVGPathGroup({})".format(", ".join(svg_path.__repr__() for svg_path in self.svg_paths))
@@ -284,8 +287,8 @@ class SVGPathGroup(SVGPrimitive):
         return viz_elements
 
     def _get_bbox_viz(self):
-        color = "red" if self.color == "black" else self.color
-        bbox = self.bbox().to_rectangle(color=color)
+        stroke = "red" if self.stroke == "black" else self.stroke
+        bbox = self.bbox().to_rectangle(color=stroke)
         return bbox
 
     def to_path(self):
@@ -294,8 +297,9 @@ class SVGPathGroup(SVGPrimitive):
     def to_str(self, with_markers=False, *args, **kwargs):
         fill_attr = self._get_fill_attr()
         marker_attr = 'marker-start="url(#arrow)"' if with_markers else ''
-        return '<path {} {} filling="{}" d="{}"></path>'.format(fill_attr, marker_attr, self.path.filling,
-                                                   " ".join(svg_path.to_str() for svg_path in self.svg_paths))
+        return '<path {} fill="{}" stroke="{}" d="{}"></path>'.format(marker_attr,
+                            SVGPath.color_tohex(self.path.fill), SVGPath.color_tohex(self.path.stroke),
+                            " ".join(svg_path.to_str() for svg_path in self.svg_paths))
 
     def to_tensor(self, PAD_VAL=-1):
         return torch.cat([p.to_tensor(PAD_VAL=PAD_VAL) for p in self.svg_paths], dim=0)
@@ -368,7 +372,7 @@ class SVGPathGroup(SVGPrimitive):
 
     def split_paths(self):
         return [SVGPathGroup([svg_path], self.origin,
-                             self.color, self.fill, self.dasharray, self.stroke_width, self.opacity)
+                             self.stroke, self.fill, self.dasharray, self.stroke_width, self.opacity)
                 for svg_path in self.svg_paths]
 
     def split(self, n=None, max_dist=None, include_lines=True):
